@@ -1,0 +1,66 @@
+#include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
+
+const char *ssid = "your-ssid";
+const char *password = "your-password";
+
+ESP8266WebServer server(80);
+
+const int relayPins[] = {D1, D2, D3, D4};
+const int numRelays = 4;
+
+void setup() {
+  Serial.begin(115200);
+
+  // Connect to Wi-Fi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi...");
+  }
+  Serial.println("Connected to WiFi");
+
+  // Print the IP address to the Serial Monitor
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  // Initialize relay pins
+  for (int i = 0; i < numRelays; i++) {
+    pinMode(relayPins[i], OUTPUT);
+    digitalWrite(relayPins[i], HIGH);  // Initially turn off relays
+  }
+
+  // Define web server routes
+  server.on("/", HTTP_GET, handleRoot);
+  server.on("/relay", HTTP_POST, handleRelay);
+
+  server.begin();
+}
+
+void loop() {
+  server.handleClient();
+}
+
+void handleRoot() {
+  String html = "<html><body>";
+  for (int i = 0; i < numRelays; i++) {
+    html += "<p>LED " + String(i + 1) + ": ";
+    html += "<a href='/relay?state=on&id=" + String(i) + "'>ON</a> | ";
+    html += "<a href='/relay?state=off&id=" + String(i) + "'>OFF</a></p>";
+  }
+  html += "</body></html>";
+  server.send(200, "text/html", html);
+}
+
+void handleRelay() {
+  String state = server.arg("state");
+  int relayId = server.arg("id").toInt();
+
+  if (state == "on") {
+    digitalWrite(relayPins[relayId], LOW);
+  } else if (state == "off") {
+    digitalWrite(relayPins[relayId], HIGH);
+  }
+
+  server.send(200, "text/plain", "OK");
+}
