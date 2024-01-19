@@ -1,0 +1,169 @@
+#include <WiFi.h>
+#include <WiFiMulti.h>
+#include <HTTPClient.h>
+#include   <Adafruit_Sensor.h>
+#include <DHT.h>
+#include <DHT_U.h>
+
+WiFiMulti WiFiMulti;
+HTTPClient   ask;
+
+// user config: TODO
+#define  MOISTURE_THRESHOLD     55   // moisture   alert threshold
+
+const char* ssid = "***";             // enter wifi user   name 
+const char* password = "***";         // enter wifi password
+const   char* apiKeyIn = "E5IiZ2835YBOgiiQwKjEErx7gaiaVIbw";      // Write your api key   given from ask sensor
+const unsigned int writeInterval = 25000; // write interval   (in ms)
+
+// ASKSENSORS config.
+const char* host = "api.asksensors.com";   // ASKSENSORS API host name
+const int httpPort = 80;      // port
+
+//   DHT config.
+#define DHTPIN            4         ////d4 Pin which is connected   to the DHT sensor.
+// Uncomment the type of sensor in use:
+#define DHTTYPE            DHT11     // DHT 11 
+//#define DHTTYPE           DHT22     // DHT   22 (AM2302)
+//#define DHTTYPE           DHT21     // DHT 21 (AM2301)
+DHT_Unified   dht(DHTPIN, DHTTYPE);
+uint32_t delayMS;
+int status = WL_IDLE_STATUS;
+float   myTemperature = 0, myHumidity = 0; 
+int moisture_Pin= A0; // Soil Moisture Sensor   input at Analog PIN vp
+int moisture_value= 0, moisture_state = 0xFF;
+
+//   create ASKSENSORS client
+// 
+void setup() {
+ // open serial
+  Serial.begin(115200);
+
+   Serial.println("Wait for WiFi... ");
+
+  // connecting to the WiFi network
+   WiFiMulti.addAP(ssid, password);
+  while (WiFiMulti.run() != WL_CONNECTED)   {
+    Serial.print(".");
+    delay(500);
+  }
+  // connected
+  Serial.println("WiFi   connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+   
+  // Initialize device.
+  dht.begin();
+  Serial.println("DHTxx Unified   Sensor Example");
+  // Print temperature sensor details.
+  sensor_t sensor;
+   dht.temperature().getSensor(&sensor);
+  Serial.println("------------------------------------");
+   Serial.println("Temperature");
+  Serial.print  ("Sensor:       "); Serial.println(sensor.name);
+   Serial.print  ("Driver Ver:   "); Serial.println(sensor.version);
+  Serial.print   ("Unique ID:    "); Serial.println(sensor.sensor_id);
+  Serial.print  ("Max   Value:    "); Serial.print(sensor.max_value); Serial.println(" C");
+  Serial.print   ("Min Value:    "); Serial.print(sensor.min_value); Serial.println(" C");
+   Serial.print  ("Resolution:   "); Serial.print(sensor.resolution); Serial.println("   C");  
+  Serial.println("------------------------------------");
+  // Print   humidity sensor details.
+  dht.humidity().getSensor(&sensor);
+  Serial.println("------------------------------------");
+   Serial.println("Humidity");
+  Serial.print  ("Sensor:       "); Serial.println(sensor.name);
+   Serial.print  ("Driver Ver:   "); Serial.println(sensor.version);
+  Serial.print   ("Unique ID:    "); Serial.println(sensor.sensor_id);
+  Serial.print  ("Max   Value:    "); Serial.print(sensor.max_value); Serial.println("%");
+  Serial.print   ("Min Value:    "); Serial.print(sensor.min_value); Serial.println("%");
+   Serial.print  ("Resolution:   "); Serial.print(sensor.resolution); Serial.println("%");   
+  Serial.println("------------------------------------");
+  // Set delay   between sensor readings based on sensor details.
+  delayMS = sensor.min_delay   / 1000;
+}
+
+void loop() {
+   
+   Serial.println("            Temperature,   Humidity and Soil Moisture sensors ");
+        Serial.print("Moisture level   : ");
+    moisture_value= analogRead(moisture_Pin);
+    moisture_value= moisture_value/10;
+     Serial.println(moisture_value);
+   if(moisture_value > MOISTURE_THRESHOLD)   moisture_state = 0;
+   else moisture_state = 1;
+// Read data from DHT
+//   Delay between measurements.
+  delay(delayMS);
+  // Get temperature event and   print its value.
+  sensors_event_t event;  
+  dht.temperature().getEvent(&event);
+   if (isnan(event.temperature)) {
+    Serial.println("Error reading temperature!");
+   }
+  else {
+    // Update temperature and humidity
+    myTemperature =   (float)event.temperature;
+    Serial.print("Temperature: ");
+    Serial.print(myTemperature);
+     Serial.println(" C");
+  }
+  // Get humidity event and print its value.
+   dht.humidity().getEvent(&event);
+  if (isnan(event.relative_humidity)) {
+     Serial.println("Error reading humidity!");
+  }
+  else {
+     myHumidity   = (float)event.relative_humidity;
+    Serial.print("Humidity: ");
+    Serial.print(myHumidity);
+     Serial.println("%");
+  }
+  
+// Use WiFiClient class to create TCP   connections
+  WiFiClient client;
+
+
+  if (!client.connect(host, httpPort))   {
+    Serial.println("connection failed");
+    return;
+  }else {
+     
+    // Create a URL for the request
+  String url = "https://api.asksensors.com/write/";
+   url += apiKeyIn;
+  url += "?module1=";
+  url += myTemperature;
+  url   += "&module2=";
+  url += myHumidity;
+  url += "&module3=";
+  url +=   moisture_value;
+  url += "&module4=";
+  url += moisture_state;
+  
+   Serial.print(" requesting URL: ");
+  Serial.println(url);
+  
+   ask.begin(url);   //Specify the URL
+          Serial.println("Temperature, Humidity and Soil moisture   data sent to Asksensors");
+
+    //Check for the returning code
+    int   httpCode = ask.GET();          
+ 
+    if (httpCode > 0) { 
+ 
+        String   payload = ask.getString();
+        Serial.println(httpCode);
+        Serial.println(payload);
+       } else {
+      Serial.println("Error on HTTP request");
+    }
+   
+    ask.end(); //End 
+    Serial.println(" End ");
+
+  }
+
+  client.stop();   // stop client
+  
+  delay(writeInterval);    // delay
+}
