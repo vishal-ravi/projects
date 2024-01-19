@@ -1,0 +1,44 @@
+#include <Servo.h>
+
+#define TRIG_PIN D1
+#define ECHO_PIN D2
+#define SERVO_PIN D3
+
+Servo myservo;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  myservo.attach(SERVO_PIN);
+}
+
+void loop() {
+  for (int angle = 0; angle <= 180; angle += 30) {
+    moveServo(angle);
+    delay(500);
+    float distance = measureDistance();
+    Serial.print("Angle: ");
+    Serial.print(angle);
+    Serial.print(" degrees, Distance: ");
+    Serial.print(distance);
+    Serial.println(" cm");
+  }
+}
+
+void moveServo(int angle) {
+  myservo.write(angle);
+  delay(500);
+}
+
+float measureDistance() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  float duration = pulseIn(ECHO_PIN, HIGH);
+  // Speed of sound is 343 m/s or 0.0343 cm/µs
+  return (duration * 0.0343) / 2;
+}
